@@ -12,7 +12,8 @@ from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import train_test_split, cross_validate, RandomizedSearchCV, GridSearchCV
 import statsmodels.api as sm
 from matplotlib import pyplot as plt
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, MaxAbsScaler, OneHotEncoder, RobustScaler, KernelCenterer, \
+    StandardScaler
 
 raw_train = pd.read_csv('../data/dengue_features_train.csv')
 
@@ -39,6 +40,8 @@ iqtest = raw_test[raw_test.city == 'iq'].copy()
 
 
 
+
+
 kolonlar = [
             'ndvi_ne', 'ndvi_nw',
             'ndvi_se', 'ndvi_sw',
@@ -60,46 +63,88 @@ kolonlar = [
             'station_precip_mm'
             ]
 
-for v in kolonlar:
-    sj.loc[:, v] = [max(x, sjtest[v].min()) for x in sj[v]]
-    sj.loc[:, v] = [min(x, sjtest[v].max()) for x in sj[v]]    ##### Outlier Çıkarma #####   ### isolotion forest ve LocalOutlierFactor denendi grafik çizildi
-      #### Min Max  remover outlier detection
 
 
-def prepare(frame):
-    sicaklik = frame.loc[:, ['station_avg_temp_c',
+for kolon in kolonlar:
+    sj.loc[:, kolon] = [max(sjtest[kolon].min(), sample) for sample in sj[kolon]]
+    sj.loc[:, kolon] = [min(sjtest[kolon].max(), sample) for sample in sj[kolon]]    ##### Outlier Çıkarma #####   ### isolotion forest ve LocalOutlierFactor denendi grafik çizildi
+
+
+def prepare(sj):
+    sicaklik = sj.loc[:, ['station_avg_temp_c',
                              'reanalysis_min_air_temp_k',
                              'station_min_temp_c', 'reanalysis_dew_point_temp_k',
                              'reanalysis_air_temp_k']]  ##### Verileri Oranla #####
-    sicaklik_ort = pd.DataFrame(MinMaxScaler().fit_transform(sicaklik), columns=sicaklik.columns)
-    frame.loc[:, 'sicaklik_ort'] = sicaklik_ort.mean(axis=1)
+    sicaklik_ort = pd.DataFrame(StandardScaler().fit_transform(sicaklik), columns=sicaklik.columns)
+    sj.loc[:, 'sicaklik_ort'] = sicaklik_ort.mean(axis=1)
+
+
+    #MaxAbsScaler
+    #MinMaxScaler
+    #OneHotEncoder ## hata verdi        denenenler isolation forest ve LOF metotları da denendi
+    #RobustScaler
+    #KernelCenterer  ##hata
+    #StandardScaler
+
+
 
     haftasal = [11, 30]  #### birçok kesme noktası denendi en uygunu 11 30 gibi ####
-    frame['lagged_winter'] = np.where((frame.weekofyear < haftasal[0]), 1, 0)
-    frame['lagged_spring'] = np.where((frame.weekofyear >= haftasal[0]) & (frame.weekofyear < haftasal[1]), 1, 0)
-    frame['lagged_summer'] = np.where((frame.weekofyear >= haftasal[1]), 1, 0)
+    sj['mevsim_spring'] = np.where((sj.weekofyear >= haftasal[0]) & (sj.weekofyear < haftasal[1]), 1, 0)
+    sj['mevsim_winter'] = np.where((sj.weekofyear < haftasal[0]), 1, 0)
+    sj['mevsim_summer'] = np.where((sj.weekofyear >= haftasal[1]), 1, 0)
 
-    gerekenler = ['total_cases', 'lagged_spring', 'lagged_summer', 'lagged_winter', 'station_max_temp_c', 'sicaklik_ort', 'reanalysis_relative_humidity_percent',
+    gerekenler = ['total_cases', 'mevsim_spring', 'mevsim_summer', 'mevsim_winter', 'station_max_temp_c', 'sicaklik_ort', 'reanalysis_relative_humidity_percent',
                   'reanalysis_specific_humidity_g_per_kg']  ##### Gereksiz kolonları çıkar #####
-    for col in frame.columns:
+    for col in sj.columns:
         if col not in gerekenler:
-            frame = frame.drop(col, axis=1)
+            sj = sj.drop(col, axis=1)
 
     kaydir = ['station_max_temp_c', 'sicaklik_ort', 'reanalysis_relative_humidity_percent', 'reanalysis_specific_humidity_g_per_kg']
 
     for i in kaydir:
-        frame[i + '_1lag'] = frame[i].shift(-1)
-        frame[i + '_2lag'] = frame[i].shift(-2)  ##### 4 tane gecikme kolonu ekle , 1 , 2, 3 ,4 ayrı ayrı denendi ######
-        frame[i + '_3lag'] = frame[i].shift(-3)
-        frame[i + '_4lag'] = frame[i].shift(-4)
+        sj[i + '_1week'] = sj[i].shift(-1)
+        sj[i + '_2week'] = sj[i].shift(-2)  ##### 4 tane gecikme kolonu ekle , 1 , 2, 3 ,4 ayrı ayrı denendi ######
+        sj[i + '_3week'] = sj[i].shift(-3)
 
-    frame = frame.fillna(method='ffill')  #### boşluk hala varsa ###
-    return frame
+    sj = sj.fillna(method='ffill')  #### boşluk hala varsa ###
+    return sj
 
 
 # model = IsolationForest(n_estimators=50, max_samples='auto', contamination=float(0.1), max_features=1.0)          ### isolationForest
 
+
 sj = prepare(sj)
+def process_iq(inputdata):
+    features = inputdata.fillna(method='ffill')
+    mevsimler = [14, 28, 37]  ## bir çok deneme sonucu
+
+
+    features['mevsim_kis'] = np.where((features.weekofyear >= mevsimler[0]) & (features.weekofyear < mevsimler[1]), 1,
+                                      0)
+    features['mevsim_yaz'] = np.where((features.weekofyear >= mevsimler[2]), 1, 0)
+    features['mevsim_bahar'] = np.where((features.weekofyear >= mevsimler[1]) &
+                                        (features.weekofyear < mevsimler[2]), 1, 0)
+    features['mevsim_guz'] = np.where((features.weekofyear < mevsimler[0]), 1, 0)
+
+    columns = ['total_cases', 'reanalysis_specific_humidity_g_per_kg', 'mevsim_bahar', 'mevsim_yaz', 'mevsim_guz',
+               'mevsim_kis', 'precipitation_amt_mm', 'station_avg_temp_c',
+               'reanalysis_min_air_temp_k', 'reanalysis_dew_point_temp_k', 'station_min_temp_c'
+               ]
+
+    for col in features.columns:
+        if col not in columns:
+            features = features.drop(col, axis=1)
+
+    kaydir_iq = ['reanalysis_min_air_temp_k', 'reanalysis_specific_humidity_g_per_kg', 'station_min_temp_c',
+                 'reanalysis_dew_point_temp_k', 'station_avg_temp_c', 'precipitation_amt_mm']
+
+    for i in kaydir_iq:
+        features[i + '_1week'] = features[i].shift(-1)
+        features[i + '_2week'] = features[i].shift(-2)
+        features[i + '_3week'] = features[i].shift(-3)
+
+    features = features.fillna(method='ffill')  ##boşluk kalmadığına emin ol forward filling
+    return features
 
 sj.to_csv("../data/sjtest_ciktisi.csv")
 
@@ -111,7 +156,7 @@ sj_test = prepare(sj_test)
 sj_X = sj.drop(['total_cases'], axis=1)
 sj_y = sj.total_cases
 
-X_train_sj, X_test_sj, y_train_sj, y_test_sj = train_test_split(
+sj_train_X, sj_test_X, sj_trainY, sjtestY = train_test_split(
     sj_X, sj_y, test_size=0.2, shuffle=False)
 
 # param_grid = {
@@ -140,54 +185,23 @@ sj_regressor = RandomForestRegressor(**sj_regressor_params, criterion='mae')
 sj_regressor.fit(sj_X, sj_y)
 sj_pred = sj_regressor.predict(sj_test).astype(int)
 
-for v in kolonlar:
-    iq.loc[:, v] = [min(x, iqtest[v].max()) for x in iq[v]]
-    iq.loc[:, v] = [max(x, iqtest[v].min()) for x in iq[v]]
+for duzeltilecek in kolonlar:
+    iq.loc[:, duzeltilecek] = [min(iqtest[duzeltilecek].max(), sample) for sample in iq[duzeltilecek]]
+    iq.loc[:, duzeltilecek] = [max(iqtest[duzeltilecek].min(), sample) for sample in iq[duzeltilecek]]
 
 sq_regressor3 = RandomForestRegressor(**sj_regressor_params, criterion='mae')  ### test metodu mean absolute error
-sq_regressor3.fit(X_train_sj, y_train_sj)
-tahmin = sq_regressor3.predict(X_test_sj).astype(int)
-print("sj cross validation MAE:", mean_absolute_error(tahmin, y_test_sj))
+sq_regressor3.fit(sj_train_X, sj_trainY)
+tahmin = sq_regressor3.predict(sj_test_X).astype(int)
+print("sj cross validation MAE:", mean_absolute_error(tahmin, sjtestY))
 
 iq = raw_train2[raw_train2.city == 'iq'].copy()
-
-
-def process_iq(inputdata):
-    features = inputdata.fillna(method='ffill')
-    mevsimler = [14, 28, 37]  ## bir çok deneme sonucu
-    features['lagged_guz'] = np.where((features.weekofyear < mevsimler[0]), 1, 0)
-
-    features['lagged_kis'] = np.where((features.weekofyear >= mevsimler[0]) & (features.weekofyear < mevsimler[1]), 1, 0)
-    features['lagged_bahar'] = np.where((features.weekofyear >= mevsimler[1]) &
-                                        (features.weekofyear < mevsimler[2]), 1, 0)
-    features['lagged_yaz'] = np.where((features.weekofyear >= mevsimler[2]), 1, 0)
-
-    columns = ['total_cases', 'reanalysis_specific_humidity_g_per_kg','lagged_bahar', 'lagged_yaz', 'lagged_guz', 'lagged_kis', 'precipitation_amt_mm', 'station_avg_temp_c',
-               'reanalysis_min_air_temp_k', 'reanalysis_dew_point_temp_k', 'station_min_temp_c'
-               ]
-
-    for col in features.columns:
-        if col not in columns:
-            features = features.drop(col, axis=1)
-
-    kaydir_iq = ['reanalysis_min_air_temp_k', 'reanalysis_specific_humidity_g_per_kg', 'station_min_temp_c',
-                 'reanalysis_dew_point_temp_k', 'station_avg_temp_c', 'precipitation_amt_mm']
-
-    for i in kaydir_iq:
-        features[i + '_1lag'] = features[i].shift(-1)
-        features[i + '_2lag'] = features[i].shift(-2)
-        features[i + '_3lag'] = features[i].shift(-3)
-        features[i + '_4lag'] = features[i].shift(-4)
-
-    features = features.fillna(method='ffill')  ##boşluk kalmadığına emin ol forward filling
-    return features
 
 
 iq = process_iq(iq)
 iq_X = iq.drop(['total_cases'], axis=1)
 iq_y = iq.total_cases
 
-X_train_iq, X_test_iq, y_train_iq, y_test_iq = train_test_split(  #### train test split #### kendi testimiz için gerekli
+iq_split_train_X, iq_split_test_X, iq_train_y, iq_text_y = train_test_split(  #### train test split #### kendi testimiz için gerekli
     iq_X, iq_y, test_size=0.2, shuffle=False)
 
 
@@ -203,13 +217,12 @@ iq_rf_params = {
 
 iq_regressor = RandomForestRegressor(**iq_rf_params, criterion='mae')
 iq_regressor.fit(iq_X, iq_y)
-print('Bitti!')
 
 
 iq_regressor_test = RandomForestRegressor(**iq_rf_params, criterion='mae')
-iq_regressor_test.fit(X_train_iq, y_train_iq)  #### train test split #### kendi testimiz için gerekli
-tahmin = iq_regressor_test.predict(X_test_iq).astype(int)
-print("iq cross validation MAE:", mean_absolute_error(tahmin, y_test_iq))
+iq_regressor_test.fit(iq_split_train_X, iq_train_y)  #### train test split #### kendi testimiz için gerekli
+tahmin = iq_regressor_test.predict(iq_split_test_X).astype(int)
+print("iq cross validation MAE:", mean_absolute_error(tahmin, iq_text_y))
 
 
 
@@ -217,6 +230,11 @@ iq_test = raw_test[raw_test.city == 'iq'].copy()
 iq_test = process_iq(iq_test)
 iq_pred = iq_regressor.predict(iq_test).astype(int)
 
+submission = pd.read_csv('../data/submission_format.csv', index_col=[0, 1, 2])
+
+submission.total_cases = np.concatenate([sj_pred, iq_pred])
+
+submission.to_csv("../data/final.csv")
 
 
 feat_importances = pd.Series(sj_regressor.feature_importances_, index=sj_X.columns)
@@ -224,6 +242,3 @@ feat_importances.nlargest(35).plot(kind='barh')  ##### importance grafiği #####
 plt.show()
 
 
-submission = pd.read_csv('../data/submission_format.csv', index_col=[0, 1, 2])
-submission.total_cases = np.concatenate([sj_pred, iq_pred])
-submission.to_csv("../data/final.csv")
