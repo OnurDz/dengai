@@ -53,6 +53,7 @@ def prepare(frame):
     sicaklik_ort = pd.DataFrame(MinMaxScaler().fit_transform(sicaklik), columns=sicaklik.columns)
     frame.loc[:, 'temps_mean'] = sicaklik_ort.mean(axis=1)
 
+
     haftasal = [11, 30]  #### birçok kesme noktası denendi en uygunu 11 30 gibi ####
     frame['lagged_winter'] = np.where((frame.weekofyear < haftasal[0]), 1, 0)
 
@@ -77,6 +78,8 @@ def prepare(frame):
 
     frame = frame.fillna(method='ffill')  #### boşluk hala varsa ###
     return frame
+
+#model = IsolationForest(n_estimators=50, max_samples='auto', contamination=float(0.1), max_features=1.0)          ### isolationForest
 
 sj = prepare(sj)
 
