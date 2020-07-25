@@ -30,18 +30,18 @@ iq = raw_train[raw_train.city == 'iq'].copy()
 iqtest = raw_test[raw_test.city == 'iq'].copy()
 
 kolonlar = ['ndvi_ne', 'ndvi_nw',
-           'ndvi_se', 'ndvi_sw', 'precipitation_amt_mm', 'reanalysis_air_temp_k',
-           'reanalysis_avg_temp_k', 'reanalysis_dew_point_temp_k',
-           'reanalysis_max_air_temp_k', 'reanalysis_min_air_temp_k',
-           'reanalysis_precip_amt_kg_per_m2',
-           'reanalysis_relative_humidity_percent', 'reanalysis_sat_precip_amt_mm',
-           'reanalysis_specific_humidity_g_per_kg', 'reanalysis_tdtr_k',
-           'station_avg_temp_c', 'station_diur_temp_rng_c', 'station_max_temp_c',
-           'station_min_temp_c', 'station_precip_mm']
-
+            'ndvi_se', 'ndvi_sw', 'precipitation_amt_mm', 'reanalysis_air_temp_k',
+            'reanalysis_avg_temp_k', 'reanalysis_dew_point_temp_k',
+            'reanalysis_max_air_temp_k', 'reanalysis_min_air_temp_k',
+            'reanalysis_precip_amt_kg_per_m2',
+            'reanalysis_relative_humidity_percent', 'reanalysis_sat_precip_amt_mm',
+            'reanalysis_specific_humidity_g_per_kg', 'reanalysis_tdtr_k',
+            'station_avg_temp_c', 'station_diur_temp_rng_c', 'station_max_temp_c',
+            'station_min_temp_c', 'station_precip_mm']
 
 for v in kolonlar:
-    sj.loc[:, v] = [min(x, sjtest[v].max()) for x in sj[v]]  ##### Outlier Çıkarma #####   ### isolotion forest ve LocalOutlierFactor denendi grafik çizildi
+    sj.loc[:, v] = [min(x, sjtest[v].max()) for x in sj[
+        v]]  ##### Outlier Çıkarma #####   ### isolotion forest ve LocalOutlierFactor denendi grafik çizildi
     sj.loc[:, v] = [max(x, sjtest[v].min()) for x in sj[v]]  #### Min Max  remover outlier detection
 
 
@@ -68,7 +68,7 @@ def prepare(frame):
             frame = frame.drop(col, axis=1)
 
     kaydir = ['station_max_temp_c', 'temps_mean', 'reanalysis_relative_humidity_percent',
-                'reanalysis_specific_humidity_g_per_kg']
+              'reanalysis_specific_humidity_g_per_kg']
     for i in kaydir:
         frame[i + '_1lag'] = frame[i].shift(-1)
         frame[i + '_2lag'] = frame[i].shift(-2)  ##### 4 tane gecikme kolonu ekle ######
@@ -77,6 +77,9 @@ def prepare(frame):
 
     frame = frame.fillna(method='ffill')  #### boşluk hala varsa ###
     return frame
+
+
+# model = IsolationForest(n_estimators=50, max_samples='auto', contamination=float(0.1), max_features=1.0)          ### isolationForest
 
 sj = prepare(sj)
 
@@ -102,28 +105,26 @@ X_train_sj, X_test_sj, y_train_sj, y_test_sj = train_test_split(
 # }
 
 
-sj_rf_params = {'max_depth': 35,
+sj_regressor_params = {'max_depth': 35,
                 'bootstrap': True,
                 'max_features': 5,
                 'min_samples_leaf': 6,
                 'min_samples_split': 5,
                 'n_estimators': 400}
 
+sj_regressor = RandomForestRegressor(**sj_regressor_params, criterion='mae')
 
-sj_rfr = RandomForestRegressor(**sj_rf_params, criterion='mae')
-
-# clf = RandomizedSearchCV(sj_rfr, param_grid, n_iter=1000, cv=5, verbose=0, n_jobs=-1)
+# clf = RandomizedSearchCV(sj_regressor, param_grid, n_iter=1000, cv=5, verbose=0, n_jobs=-1)
 # search = clf.fit(sj_X, sj_X)
 
-sj_rfr.fit(sj_X, sj_y)
-sj_pred = sj_rfr.predict(sj_test).astype(int)
-
+sj_regressor.fit(sj_X, sj_y)
+sj_pred = sj_regressor.predict(sj_test).astype(int)
 
 for v in kolonlar:
     iq.loc[:, v] = [min(x, iqtest[v].max()) for x in iq[v]]
     iq.loc[:, v] = [max(x, iqtest[v].min()) for x in iq[v]]
 
-sq_regressor3 = RandomForestRegressor(**sj_rf_params, criterion='mae')   ### test metodu mean absolute error
+sq_regressor3 = RandomForestRegressor(**sj_regressor_params, criterion='mae')  ### test metodu mean absolute error
 sq_regressor3.fit(X_train_sj, y_train_sj)
 tahmin = sq_regressor3.predict(X_test_sj).astype(int)
 print("sj cross validation MAE:", mean_absolute_error(tahmin, y_test_sj))
@@ -142,10 +143,10 @@ def process_iq(inputdata):
                                      (feats.weekofyear < mevsimler[2]), 1, 0)
     feats['lagged_yaz'] = np.where((feats.weekofyear >= mevsimler[2]), 1, 0)
 
-    columns = ['total_cases','reanalysis_specific_humidity_g_per_kg',
-            'lagged_bahar', 'lagged_yaz', 'lagged_guz', 'lagged_kis','precipitation_amt_mm', 'station_avg_temp_c',
-            'reanalysis_min_air_temp_k', 'reanalysis_dew_point_temp_k', 'station_min_temp_c'
-            ]
+    columns = ['total_cases', 'reanalysis_specific_humidity_g_per_kg',
+               'lagged_bahar', 'lagged_yaz', 'lagged_guz', 'lagged_kis', 'precipitation_amt_mm', 'station_avg_temp_c',
+               'reanalysis_min_air_temp_k', 'reanalysis_dew_point_temp_k', 'station_min_temp_c'
+               ]
 
     for col in feats.columns:
         if col not in columns:
@@ -169,12 +170,12 @@ iq = process_iq(iq)
 iq_X = iq.drop(['total_cases'], axis=1)
 iq_y = iq.total_cases
 
-X_train_iq, X_test_iq, y_train_iq, y_test_iq = train_test_split(    #### train test split #### kendi testimiz için gerekli
+X_train_iq, X_test_iq, y_train_iq, y_test_iq = train_test_split(  #### train test split #### kendi testimiz için gerekli
     iq_X, iq_y, test_size=0.2, shuffle=False)
 
 iq_rf_params = {'max_depth': 35,
                 'max_features': 5,
-                'min_samples_leaf': 3,    ##### hyperparameter dene ####
+                'min_samples_leaf': 3,  ##### hyperparameter dene ####
                 'min_samples_split': 2,
                 'n_estimators': 2000}
 
@@ -183,7 +184,7 @@ iq_regressor.fit(iq_X, iq_y)
 print('Bitti!')
 
 iq_regressor_test = RandomForestRegressor(**iq_rf_params, criterion='mae')
-iq_regressor_test.fit(X_train_iq, y_train_iq)                                             #### train test split #### kendi testimiz için gerekli
+iq_regressor_test.fit(X_train_iq, y_train_iq)  #### train test split #### kendi testimiz için gerekli
 tahmin = iq_regressor_test.predict(X_test_iq).astype(int)
 print("iq cross validation MAE:", mean_absolute_error(tahmin, y_test_iq))
 
@@ -192,8 +193,8 @@ iq_test = process_iq(iq_test)
 
 iq_pred = iq_regressor.predict(iq_test).astype(int)
 
-feat_importances = pd.Series(sj_rfr.feature_importances_, index=sj_X.columns)
-feat_importances.nlargest(35).plot(kind='barh')                                          ##### importance grafiği ######
+feat_importances = pd.Series(sj_regressor.feature_importances_, index=sj_X.columns)
+feat_importances.nlargest(35).plot(kind='barh')  ##### importance grafiği ######
 plt.show()
 
 submission = pd.read_csv('../data/submission_format.csv', index_col=[0, 1, 2])
