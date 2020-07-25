@@ -57,7 +57,8 @@ y_train_sj, x_train_sj = dmatrices(expr, sj_train_features, return_type='datafra
 y_test_sj, x_test_sj = dmatrices(expr, sj_test_features, return_type='dataframe')
 
 poisson_training_results = sm.GLM(y_train_sj, x_train_sj, family=sm.families.Poisson()).fit()
-#print(poisson_training_results.summary())
+print("CİTY SJ POISSON")
+print(poisson_training_results.summary())
 #print(poisson_training_results.mu)
 #print(len(poisson_training_results.mu))
 
@@ -66,15 +67,15 @@ sj_train_features['TC_LAMBDA'] = poisson_training_results.mu
 sj_train_features['AUX_OLS_DEP'] = sj_train_features.apply(lambda x: ((x['total_case'] - x['TC_LAMBDA'])**2 - x['total_case']) / x['TC_LAMBDA'], axis=1)
 ols_expr = """AUX_OLS_DEP ~ TC_LAMBDA - 1"""
 aux_olsr_results = smf.ols(ols_expr, sj_train_features).fit()
-# print(aux_olsr_results.params)
-# print(aux_olsr_results.tvalues)
+#print(aux_olsr_results.params)
+#print(aux_olsr_results.tvalues)
 
 nb2_training_results = sm.GLM(y_train_sj, x_train_sj, family=sm.families.NegativeBinomial(alpha=aux_olsr_results.params[0])).fit()
 #print(nb2_training_results.summary())
 nb2_predictions = nb2_training_results.get_prediction(x_test_sj)
 
 predictions_summary_frame = nb2_predictions.summary_frame()
-print("CİTY SJ")
+print("CİTY SJ PREDICTIONS")
 print("------------------------")
 print(predictions_summary_frame)
 sj_predictions = predictions_summary_frame['mean']
@@ -85,7 +86,8 @@ y_train_iq, x_train_iq = dmatrices(expr, iq_train_features, return_type='datafra
 y_test_iq, x_test_iq = dmatrices(expr, iq_test_features, return_type='dataframe')
 
 poisson_training_results = sm.GLM(y_train_iq, x_train_iq, family=sm.families.Poisson()).fit()
-#print(poisson_training_results.summary())
+print("CİTY IQ POISSON")
+print(poisson_training_results.summary())
 #print(poisson_training_results.mu)
 #print(len(poisson_training_results.mu))
 
@@ -95,14 +97,14 @@ iq_train_features['AUX_OLS_DEP'] = iq_train_features.apply(lambda x: ((x['total_
 ols_expr = """AUX_OLS_DEP ~ TC_LAMBDA - 1"""
 aux_olsr_results = smf.ols(ols_expr, iq_train_features).fit()
 # print(aux_olsr_results.params)
-# print(aux_olsr_results.tvalues)
+print(aux_olsr_results.tvalues)
 
 nb2_training_results = sm.GLM(y_train_iq, x_train_iq, family=sm.families.NegativeBinomial(alpha=aux_olsr_results.params[0])).fit()
 #print(nb2_training_results.summary())
 nb2_predictions = nb2_training_results.get_prediction(x_test_iq)
 
 predictions_summary_frame = nb2_predictions.summary_frame()
-print("CİTY IQ")
+print("CİTY IQ PREDICTIONS")
 print("------------------------")
 print(predictions_summary_frame)
 
